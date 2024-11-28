@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ハッカー風ワークスペース</title>
+    <style>
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+        }
+        .container {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+        }
+        #timer {
+            padding: 15px;
+            border-bottom: 1px solid #0f0;
+            text-align: center;
+            cursor: pointer;
+            font-size: 24px;
+        }
+        .editor-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            border-bottom: 1px solid #0f0;
+        }
+        .tabs {
+            display: flex;
+            background: #111;
+            padding-top: 5px;
+            padding-left: 5px;
+            align-items: center;
+        }
+        .tab {
+            padding: 8px 15px;
+            cursor: pointer;
+            color: #0f0;
+            border: 1px solid #0f0;
+            border-bottom: none;
+            margin-right: 2px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tab.active {
+            background: #0f0;
+            color: #000;
+        }
+        .tab .close-btn {
+            font-size: 12px;
+            opacity: 0.7;
+            padding: 2px 4px;
+        }
+        .tab .close-btn:hover {
+            opacity: 1;
+        }
+        .add-tab {
+            padding: 4px 8px;
+            margin-left: 5px;
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .add-tab:hover {
+            background: #0f0;
+            color: #000;
+        }
+        .notepad-container {
+            display: none;
+            position: relative;
+            flex: 1;
+        }
+        .notepad-container.active {
+            display: flex;
+        }
+        .notepad {
+            width: 100%;
+            height: 100%;
+            background: #111;
+            color: #0f0;
+            border: none;
+            padding: 10px 40px 10px 10px;
+            font-family: inherit;
+            resize: none;
+            box-sizing: border-box;
+            line-height: 1.5;
+            outline: none;
+        }
+        .line-counter {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #000;
+            color: #0f0;
+            padding: 2px 5px;
+            border: 1px solid #0f0;
+            font-size: 0.8em;
+            z-index: 100;
+        }
+        .calendar-container {
+            display: flex;
+            padding: 10px;
+            gap: 10px;
+            background: #111;
+        }
+        .month {
+            flex: 1;
+        }
+        .month-title {
+            text-align: center;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #0f0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8em;
+        }
+        th, td {
+            text-align: center;
+            padding: 2px;
+        }
+        .today {
+            background: #0f0;
+            color: #000;
+        }
+        th {
+            color: #0f0;
+        }
+        td {
+            color: #0c0;
+        }
+        .context-menu {
+            position: fixed;
+            background: #111;
+            border: 1px solid #0f0;
+            padding: 5px 0;
+            z-index: 1000;
+        }
+        .context-menu-item {
+            padding: 5px 15px;
+            cursor: pointer;
+            color: #0f0;
+        }
+        .context-menu-item:hover {
+            background: #0f0;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="timer">25:00</div>
+        <div class="editor-container">
+            <div class="tabs" id="editor-tabs">
+                <div class="tab active" data-tab="tab1">
+                    メモ1
+                    <span class="close-btn">×</span>
+                </div>
+                <div class="tab" data-tab="tab2">
+                    メモ2
+                    <span class="close-btn">×</span>
+                </div>
+                <div class="tab" data-tab="tab3">
+                    メモ3
+                    <span class="close-btn">×</span>
+                </div>
+                <button class="add-tab">+</button>
+            </div>
+            <div class="notepad-container active" data-tab="tab1">
+                <textarea id="notepad1" class="notepad" placeholder="メモ1を入力..." wrap="soft"></textarea>
+                <div class="line-counter">行数: 1</div>
+            </div>
+            <div class="notepad-container" data-tab="tab2">
+                <textarea id="notepad2" class="notepad" placeholder="メモ2を入力..." wrap="soft"></textarea>
+                <div class="line-counter">行数: 1</div>
+            </div>
+            <div class="notepad-container" data-tab="tab3">
+                <textarea id="notepad3" class="notepad" placeholder="メモ3を入力..." wrap="soft"></textarea>
+                <div class="line-counter">行数: 1</div>
+            </div>
+        </div>
+        <div class="calendar-container" id="calendar-container"></div>
+    </div>
+    <script>
+        class Timer {
+            constructor() {
+                this.minutes = 25;
+                this.seconds = 0;
+                this.isRunning = false;
+                this.timerElement = document.getElementById('timer');
+                this.lastClick = 0;
+
+                this.timerElement.addEventListener('click', (e) => {
+                    const currentTime = new Date().getTime();
+                    const timeDiff = currentTime - this.lastClick;
+                    
+                    if (timeDiff < 300) {
+                        this.reset();
+                    } else {
+                        this.toggle();
+                    }
+                    
+                    this.lastClick = currentTime;
+                });
+            }
+
+            toggle() {
+                if (this.isRunning) {
+                    this.stop();
+                } else {
+                    this.start();
+                }
+            }
+
+            start() {
+                if (!this.isRunning) {
+                    this.isRunning = true;
+                    this.interval = setInterval(() => this.tick(), 1000);
+                    this.timerElement.style.color = '#0f0';
+                }
+            }
+
+            stop() {
+                this.isRunning = false;
+                clearInterval(this.interval);
+                this.timerElement.style.color = '#f00';
+            }
+
+            reset() {
+                this.stop();
+                this.minutes = 25;
+                this.seconds = 0;
+                this.updateDisplay();
+                this.timerElement.style.color = '#0f0';
+            }
+
+            tick() {
+                if (this.seconds === 0) {
+                    if (this.minutes === 0) {
+                        this.stop();
+                        return;
+                    }
+                    this.minutes--;
+                    this.seconds = 59;
+                } else {
+                    this.seconds--;
+                }
+                this.updateDisplay();
+            }
+
+            updateDisplay() {
+                this.timerElement.textContent = 
+                    `${this.minutes.toString().padStart(2, '0')}:${this.seconds.toString().padStart(2, '0')}`;
+            }
+        }
+
+        class TabManager {
+            constructor() {
+                this.tabCount = 3;
+                this.initAddTab();
+                this.initContextMenu();
+            }
+
+            initAddTab() {
+                const addButton = document.querySelector('.add-tab');
+                addButton.addEventListener('click', () => this.createNewTab());
+            }
+
+            createNewTab() {
+                this.tabCount++;
+                const tabId = `tab${this.tabCount}`;
+                
+                const tab = document.createElement('div');
+                tab.className = 'tab';
+                tab.setAttribute('data-tab', tabId);
+                tab.innerHTML = `メモ${this.tabCount}<span class="close-btn">×</span>`;
+                
+                const container = document.createElement('div');
+                container.className = 'notepad-container';
+                container.setAttribute('data-tab', tabId);
+                container.innerHTML = `
+                    <textarea id="notepad${this.tabCount}" class="notepad" placeholder="メモ${this.tabCount}を入力..." wrap="soft"></textarea>
+                    <div class="line-counter">行数: 1</div>
+                `;
+                
+                const addButton = document.querySelector('.add-tab');
+                addButton.parentNode.insertBefore(tab, addButton);
+                document.querySelector('.editor-container').appendChild(container);
+                
+                this.initTabEvents(tab);
+                this.initTextareaEvents(container.querySelector('textarea'));
+            }
+
+            initContextMenu() {
+                const menu = document.createElement('div');
+                menu.className = 'context-menu';
+                menu.style.display = 'none';
+                menu.innerHTML = `<div class="context-menu-item" data-action="delete">タブを削除</div>`;
+                document.body.appendChild(menu);
+
+                document.addEventListener('contextmenu', (e) => {
+                    const tab = e.target.closest('.tab');
+                    if (tab) {
+                        e.preventDefault();
+                        menu.style.display = 'block';
+                        menu.style.left = `${e.pageX}px`;
+                        menu.style.top = `${e.pageY}px`;
+                        menu.setAttribute('data-target-tab', tab.getAttribute('data-tab'));
+                    }
+                });
+
+                menu.addEventListener('click', (e) => {
+                    const action = e.target.getAttribute('data-action');
+                    if (action === 'delete') {
+                        const tabId = menu.getAttribute('data-target-tab');
+                        this.deleteTab(tabId);
+                    }
+                    menu.style.display = 'none';
+                });
+
+                document.addEventListener('click', () => {
+                    menu.style.display = 'none';
+                });
+            }
+
+            deleteTab(tabId) {
+                const tab = document.querySelector(`.tab[data-tab="${tabId}"]`);
+                const container = document.querySelector(`.notepad-container[data-tab="${tabId}"]`);
+                
+                if (tab.classList.contains('active')) {
+                    const nextTab = tab.nextElementSibling;
+                    if (nextTab && nextTab.classList.contains('tab')) {
+                        this.activateTab(nextTab);
+                    } else {
+                        const prevTab = tab.previousElementSibling;
+                        if (prevTab && prevTab.classList.contains('tab')) {
+                            this.activateTab(prevTab);
+                        }
+                    }
+                }
+                
+                tab.remove();
+                container.remove();
+                localStorage.removeItem(`notes_${tabId}`);
+            }
+
+            activateTab(tab) {
+                const tabId = tab.getAttribute('data-tab');
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.notepad-container').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelector(`.notepad-container[data-tab="${tabId}"]`).classList.add('active');
+            }
+
+            initTabEvents(tab) {
+                tab.addEventListener('click', () => this.activateTab(tab));
+            }
+
+            initTextareaEvents(textarea) {
+                textarea.addEventListener('input', () => {
+                    const container = textarea.closest('.notepad-container');
+                    const tabId = container.getAttribute('data-tab');
+                    localStorage.setItem(`notes_${tabId}`, textarea.value);
+                    updateLineCount(textarea);
+                });
+            }
+        }
+
+        function createCalendars() {
+            const today = new Date();
+            const container = document.getElementById('calendar-container');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 3; i++) {
+                const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+                const monthDiv = document.createElement('div');
+                monthDiv.className = 'month';
+                
+                const monthTitle = document.createElement('div');
+                monthTitle.className = 'month-title';
+                monthTitle.textContent = `${date.getFullYear()}年${date.getMonth() + 1}月`;
+                monthDiv.appendChild(monthTitle);
+                
+                const table = document.createElement('table');
+                const days = ['日', '月', '火', '水', '木', '金', '土'];
+                
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                days.forEach(day => {
+                    const th = document.createElement('th');
+                    th.textContent = day;
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                
+                const tbody = document.createElement('tbody');
+                const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+                const firstDayIndex = date.getDay();
+                
+                let day = 1;
+                for (let week = 0; week < 6; week++) {
+                    const row = document.createElement('tr');
+                    for (let j = 0; j < 7; j++) {
+                        const cell = document.createElement('td');
+                        if (week === 0 && j < firstDayIndex || day > lastDay) {
+                            cell.textContent = '';
+                        } else {
+                            cell.textContent = day;
+                            if (date.getMonth() === today.getMonth() && 
+                                day === today.getDate() && 
+                                date.getFullYear() === today.getFullYear()) {
+                                cell.className = 'today';
+                            }
+                            day++;
+                        }
+                        row.appendChild(cell);
+                    }
+                    tbody.appendChild(row);
+                    if (day > lastDay) break;
+                }
+                table.appendChild(tbody);
+                monthDiv.appendChild(table);
+                container.appendChild(monthDiv);
+            }
+        }
+
+        function updateLineCount(textarea) {
+            const counter = textarea.parentElement.querySelector('.line-counter');
+            const lines = textarea.value.split('\n');
+            counter.textContent = `行数: ${lines.length}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new Timer();
+            new TabManager();
+            createCalendars();
+        });
+    </script>
+</body>
+</html>
